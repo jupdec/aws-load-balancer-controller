@@ -283,6 +283,26 @@ func BuildLoadBalancerConfig(f *framework.Framework, spec elbv2gw.LoadBalancerCo
 		spec.IpAddressType = new(elbv2gw.LoadBalancerIpAddressTypeDualstack)
 	}
 
+	// Default cross-zone load balancing on when the test caller didn't set it. EKS Auto's
+	// Karpenter placement often packs all targets into a single AZ while the LB is
+	// multi-AZ, causing UDP/TCP probes hitting an empty-AZ ENI to be silently dropped.
+	// AWS's server-side default for NLB is cross_zone=false; without this defaulting,
+	// tests that omit LoadBalancerAttributes are non-deterministic against Auto clusters.
+	// A caller that explicitly sets the attribute (either value) overrides this default.
+	hasCrossZone := false
+	for _, attr := range spec.LoadBalancerAttributes {
+		if attr.Key == "load_balancing.cross_zone.enabled" {
+			hasCrossZone = true
+			break
+		}
+	}
+	if !hasCrossZone {
+		spec.LoadBalancerAttributes = append(spec.LoadBalancerAttributes, elbv2gw.LoadBalancerAttribute{
+			Key:   "load_balancing.cross_zone.enabled",
+			Value: "true",
+		})
+	}
+
 	lbc := &elbv2gw.LoadBalancerConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: DefaultLbConfigName,
