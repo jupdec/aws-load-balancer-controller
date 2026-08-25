@@ -93,7 +93,6 @@ func init() {
 	_ = elbv2api.AddToScheme(scheme)
 	_ = elbv2gw.AddToScheme(scheme)
 	_ = gwv1.AddToScheme(scheme)
-	_ = gwbeta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
 
