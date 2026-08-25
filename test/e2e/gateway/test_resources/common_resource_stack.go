@@ -3,6 +3,7 @@ package test_resources
 import (
 	"context"
 	"strconv"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,9 +14,22 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/k8s"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/test/framework/utils"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwbeta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 )
+
+// nsDeleteWaitTimeout bounds how long DeleteNamespace waits for a Gateway API test
+// namespace to fully drain before force-stripping controller finalizers on its child
+// CRs. Chosen large enough for a healthy `stackDeployer.Deploy(delete)` on an NLB + TGs
+// (~90-180s worst case with AWS API throttling), short enough to make progress within
+// a 60-90 min suite when a controller reconcile is stuck.
+const nsDeleteWaitTimeout = 3 * time.Minute
+
+// nsDeleteRetryTimeout is a second, shorter wait after we've stripped finalizers to
+// give the apiserver time to garbage-collect the child CRs and complete namespace
+// deletion.
+const nsDeleteRetryTimeout = 90 * time.Second
 
 const (
 	CrossNamespacePort = 5000
@@ -298,14 +312,103 @@ func DeleteGatewayClass(ctx context.Context, f *framework.Framework, gwc *gwv1.G
 
 func DeleteNamespace(ctx context.Context, tf *framework.Framework, ns *corev1.Namespace) error {
 	tf.Logger.Info("deleting namespace", "ns", k8s.NamespacedName(ns))
-	if err := tf.K8sClient.Delete(ctx, ns); err != nil {
+	if err := tf.K8sClient.Delete(ctx, ns); err != nil && !apierrors.IsNotFound(err) {
 		tf.Logger.Info("failed to delete namespace", "ns", k8s.NamespacedName(ns))
 		return err
 	}
-	if err := tf.NSManager.WaitUntilNamespaceDeleted(ctx, ns); err != nil {
-		tf.Logger.Info("failed to wait for namespace deletion", "ns", k8s.NamespacedName(ns))
+
+	// Bound the wait. If the LBC controller is stuck reconciling a delete (partial
+	// stack teardown, AWS throttling, TG-deregister waits), Gateway/LBC/TGC finalizers
+	// stay set and namespace drain blocks indefinitely. Cap the first wait at
+	// nsDeleteWaitTimeout, then force-strip finalizers and retry a shorter wait.
+	waitCtx, cancel := context.WithTimeout(ctx, nsDeleteWaitTimeout)
+	defer cancel()
+	if err := tf.NSManager.WaitUntilNamespaceDeleted(waitCtx, ns); err == nil {
+		tf.Logger.Info("deleted namespace", "ns", k8s.NamespacedName(ns))
+		return nil
+	} else {
+		tf.Logger.Info("namespace deletion timed out; stripping gateway-API CR finalizers and retrying",
+			"ns", k8s.NamespacedName(ns), "waitErr", err.Error())
+	}
+
+	// Use a fresh Background context for the strip so a canceled parent doesn't skip cleanup.
+	stripGatewayAPIFinalizers(context.Background(), tf, ns.Name)
+
+	retryCtx, retryCancel := context.WithTimeout(ctx, nsDeleteRetryTimeout)
+	defer retryCancel()
+	if err := tf.NSManager.WaitUntilNamespaceDeleted(retryCtx, ns); err != nil {
+		tf.Logger.Info("failed to wait for namespace deletion after finalizer strip",
+			"ns", k8s.NamespacedName(ns), "err", err.Error())
 		return err
 	}
-	tf.Logger.Info("deleted namespace", "ns", k8s.NamespacedName(ns))
+	tf.Logger.Info("deleted namespace (after finalizer strip)", "ns", k8s.NamespacedName(ns))
 	return nil
+}
+
+// stripGatewayAPIFinalizers clears finalizers on Gateway API + gateway.k8s.aws CRs in the
+// given namespace so namespace deletion can proceed when the controller is stuck
+// reconciling its delete path. Best-effort: individual errors are logged but not
+// returned; a caller that needs a hard failure should re-check namespace state after.
+func stripGatewayAPIFinalizers(ctx context.Context, tf *framework.Framework, nsName string) {
+	// Gateway objects hold the primary controller finalizer.
+	gwList := &gwv1.GatewayList{}
+	if err := tf.K8sClient.List(ctx, gwList, client.InNamespace(nsName)); err == nil {
+		for i := range gwList.Items {
+			gw := &gwList.Items[i]
+			if len(gw.Finalizers) == 0 {
+				continue
+			}
+			gw.Finalizers = nil
+			if err := tf.K8sClient.Update(ctx, gw); err != nil && !apierrors.IsNotFound(err) {
+				tf.Logger.Info("strip Gateway finalizer failed", "gw", k8s.NamespacedName(gw), "err", err.Error())
+			}
+		}
+	}
+
+	// LoadBalancerConfiguration — released when no Gateway references it (see
+	// loadbalancer_configuration_controller.go handleDelete). Nulling the finalizer
+	// short-circuits that chain when the corresponding Gateway is also stuck.
+	lbcList := &elbv2gw.LoadBalancerConfigurationList{}
+	if err := tf.K8sClient.List(ctx, lbcList, client.InNamespace(nsName)); err == nil {
+		for i := range lbcList.Items {
+			lbc := &lbcList.Items[i]
+			if len(lbc.Finalizers) == 0 {
+				continue
+			}
+			lbc.Finalizers = nil
+			if err := tf.K8sClient.Update(ctx, lbc); err != nil && !apierrors.IsNotFound(err) {
+				tf.Logger.Info("strip LBC finalizer failed", "lbc", k8s.NamespacedName(lbc), "err", err.Error())
+			}
+		}
+	}
+
+	// TargetGroupConfiguration.
+	tgcList := &elbv2gw.TargetGroupConfigurationList{}
+	if err := tf.K8sClient.List(ctx, tgcList, client.InNamespace(nsName)); err == nil {
+		for i := range tgcList.Items {
+			tgc := &tgcList.Items[i]
+			if len(tgc.Finalizers) == 0 {
+				continue
+			}
+			tgc.Finalizers = nil
+			if err := tf.K8sClient.Update(ctx, tgc); err != nil && !apierrors.IsNotFound(err) {
+				tf.Logger.Info("strip TGC finalizer failed", "tgc", k8s.NamespacedName(tgc), "err", err.Error())
+			}
+		}
+	}
+
+	// ListenerRuleConfiguration.
+	lrcList := &elbv2gw.ListenerRuleConfigurationList{}
+	if err := tf.K8sClient.List(ctx, lrcList, client.InNamespace(nsName)); err == nil {
+		for i := range lrcList.Items {
+			lrc := &lrcList.Items[i]
+			if len(lrc.Finalizers) == 0 {
+				continue
+			}
+			lrc.Finalizers = nil
+			if err := tf.K8sClient.Update(ctx, lrc); err != nil && !apierrors.IsNotFound(err) {
+				tf.Logger.Info("strip LRC finalizer failed", "lrc", k8s.NamespacedName(lrc), "err", err.Error())
+			}
+		}
+	}
 }
