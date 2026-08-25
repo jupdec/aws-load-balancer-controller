@@ -1,3 +1,5 @@
+//go:build integration
+
 package alb_tests
 
 import (

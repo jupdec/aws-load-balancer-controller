@@ -1,3 +1,5 @@
+//go:build integration
+
 package chained_gateway_tests
 
 import (

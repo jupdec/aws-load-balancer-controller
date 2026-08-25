@@ -1,3 +1,5 @@
+//go:build integration
+
 package listenerset_tests
 
 import (
