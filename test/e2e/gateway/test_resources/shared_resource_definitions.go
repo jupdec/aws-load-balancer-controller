@@ -317,6 +317,38 @@ func BuildTargetGroupConfig(name string, spec elbv2gw.TargetGroupConfigurationSp
 		spec.TargetReference = &elbv2gw.Reference{}
 	}
 	spec.TargetReference.Name = svc.Name
+
+	// Default preserve_client_ip.enabled=false when this TGC will back a UDP service in
+	// instance target mode. AWS's default there is true, but UDP + instance + preserve_client_ip
+	// has a broken return path on EKS Auto: the target node's response leaves via the VPC's
+	// default route (NAT Gateway), reaching the client with a different source IP than the NLB.
+	// The client's socket rejects it, causing i/o timeouts. Callers that explicitly set the
+	// attribute keep their value.
+	isInstance := spec.DefaultConfiguration.TargetType == nil ||
+		*spec.DefaultConfiguration.TargetType == elbv2gw.TargetTypeInstance
+	hasUDP := false
+	for _, p := range svc.Spec.Ports {
+		if p.Protocol == corev1.ProtocolUDP {
+			hasUDP = true
+			break
+		}
+	}
+	if isInstance && hasUDP {
+		hasPreserveClientIP := false
+		for _, attr := range spec.DefaultConfiguration.TargetGroupAttributes {
+			if attr.Key == "preserve_client_ip.enabled" {
+				hasPreserveClientIP = true
+				break
+			}
+		}
+		if !hasPreserveClientIP {
+			spec.DefaultConfiguration.TargetGroupAttributes = append(spec.DefaultConfiguration.TargetGroupAttributes, elbv2gw.TargetGroupAttribute{
+				Key:   "preserve_client_ip.enabled",
+				Value: "false",
+			})
+		}
+	}
+
 	tgc := &elbv2gw.TargetGroupConfiguration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
