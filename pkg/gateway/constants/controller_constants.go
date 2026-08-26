@@ -32,19 +32,21 @@ const (
 )
 
 /*
-   NLB Gateway constants
+   NLB Gateway variables — assigned as package vars (not const) so downstream
+   distributions can rebrand the tag prefix at boot before the reconciler starts.
+   Mirrors the pattern used for ALBGatewayController / NLBGatewayController.
 */
 
-const (
+var (
 	// NLBGatewayTagPrefix the tag applied to all resources created by the NLB Gateway controller.
 	NLBGatewayTagPrefix = "gateway.k8s.aws.nlb"
 )
 
 /*
-   ALB Gateway Constants
+   ALB Gateway variables — see NLB block above for rationale.
 */
 
-const (
+var (
 	// ALBGatewayTagPrefix the tag applied to all resources created by the ALB Gateway controller.
 	ALBGatewayTagPrefix = "gateway.k8s.aws.alb"
 )
