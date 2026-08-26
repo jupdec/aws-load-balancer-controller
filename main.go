@@ -24,6 +24,8 @@ import (
 
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/aga"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/certs"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/deploy"
+	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/deploy/tracking"
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/shared_utils"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -38,7 +40,6 @@ import (
 	"sigs.k8s.io/aws-load-balancer-controller/v3/pkg/inject/quic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwbeta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"k8s.io/client-go/util/workqueue"
 
@@ -524,60 +525,43 @@ func setupGatewayController(ctx context.Context, mgr ctrl.Manager, cfg *gatewayC
 	logger := ctrl.Log.WithName("controllers").WithName(controllerType)
 
 	var reconciler gateway.Reconciler
-	switch controllerType {
-	case gateway_constants.NLBGatewayController:
-		reconciler = gateway.NewNLBGatewayReconciler(
-			cfg.routeLoader,
-			cfg.serviceReferenceCounter,
-			cfg.cloud,
-			cfg.k8sClient,
-			cfg.certDiscovery,
-			mgr.GetEventRecorderFor(controllerType),
-			cfg.controllerCFG,
-			cfg.finalizerManager,
-			cfg.networkingManager,
-			cfg.sgReconciler,
-			cfg.sgManager,
-			cfg.elbv2TaggingManager,
-			cfg.subnetResolver,
-			cfg.vpcInfoProvider,
-			cfg.backendSGProvider,
-			cfg.sgResolver,
-			logger,
-			cfg.metricsCollector,
-			cfg.reconcileCounters,
-			cfg.targetGroupCollector,
-			cfg.targetGroupARNMapper,
-			cfg.listenerSetStatusUpdater,
-		)
-	case gateway_constants.ALBGatewayController:
-		reconciler = gateway.NewALBGatewayReconciler(
-			cfg.routeLoader,
-			cfg.cloud,
-			cfg.k8sClient,
-			cfg.certDiscovery,
-			cfg.serviceReferenceCounter,
-			mgr.GetEventRecorderFor(controllerType),
-			cfg.controllerCFG,
-			cfg.finalizerManager,
-			cfg.networkingManager,
-			cfg.sgReconciler,
-			cfg.sgManager,
-			cfg.elbv2TaggingManager,
-			cfg.subnetResolver,
-			cfg.vpcInfoProvider,
-			cfg.backendSGProvider,
-			cfg.sgResolver,
-			logger,
-			cfg.metricsCollector,
-			cfg.reconcileCounters,
-			cfg.targetGroupCollector,
-			cfg.targetGroupARNMapper,
-			cfg.listenerSetStatusUpdater,
-		)
-	default:
-		return fmt.Errorf("unknown controller type: %s", controllerType)
+
+	gatewayTagPrefix := gateway_constants.NLBGatewayTagPrefix
+	if controllerType != gateway_constants.ALBGatewayController && controllerType != gateway_constants.NLBGatewayController {
+		return fmt.Errorf("invalid controller type: %s", controllerType)
 	}
+
+	reconcilerCreator := gateway.NewNLBGatewayReconciler
+	if controllerType == gateway_constants.ALBGatewayController {
+		reconcilerCreator = gateway.NewALBGatewayReconciler
+		gatewayTagPrefix = gateway_constants.ALBGatewayTagPrefix
+	}
+
+	trackingProvider := tracking.NewDefaultProvider(gatewayTagPrefix, cfg.controllerCFG.ClusterName)
+	stackDeployer := deploy.NewDefaultStackDeployer(cfg.cloud, cfg.k8sClient, cfg.networkingManager, cfg.sgManager, cfg.sgReconciler, cfg.elbv2TaggingManager, cfg.controllerCFG, gatewayTagPrefix, logger, cfg.metricsCollector, controllerType, true, cfg.targetGroupCollector, controllerType == gateway_constants.NLBGatewayController)
+
+	reconciler = reconcilerCreator(
+		cfg.routeLoader,
+		cfg.serviceReferenceCounter,
+		cfg.cloud,
+		cfg.k8sClient,
+		cfg.certDiscovery,
+		mgr.GetEventRecorderFor(controllerType),
+		cfg.controllerCFG,
+		cfg.finalizerManager,
+		cfg.elbv2TaggingManager,
+		trackingProvider,
+		stackDeployer,
+		cfg.subnetResolver,
+		cfg.vpcInfoProvider,
+		cfg.backendSGProvider,
+		cfg.sgResolver,
+		logger,
+		cfg.metricsCollector,
+		cfg.reconcileCounters,
+		cfg.targetGroupARNMapper,
+		cfg.listenerSetStatusUpdater,
+	)
 
 	controller, err := reconciler.SetupWithManager(ctx, mgr)
 	if err != nil {
