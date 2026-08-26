@@ -73,7 +73,7 @@ var _ = Describe("test k8s alb gateway with ListenerSet", func() {
 				ns, err = test_resources.AllocateNamespace(ctx, tf, "ls-e2e", map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 
-				gwc = test_resources.BuildGatewayClassSpec("gateway.k8s.aws/alb")
+				gwc = test_resources.BuildGatewayClassSpec(test_resources.ALBGatewayControllerName)
 				err = test_resources.CreateGatewayClass(ctx, tf, gwc)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -283,7 +283,7 @@ var _ = Describe("test k8s alb gateway with ListenerSet", func() {
 				ns, err = test_resources.AllocateNamespace(ctx, tf, "ls-reject-e2e", map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 
-				gwc = test_resources.BuildGatewayClassSpec("gateway.k8s.aws/alb")
+				gwc = test_resources.BuildGatewayClassSpec(test_resources.ALBGatewayControllerName)
 				err = test_resources.CreateGatewayClass(ctx, tf, gwc)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -465,7 +465,7 @@ var _ = Describe("test k8s alb gateway with ListenerSet", func() {
 				ns, err = test_resources.AllocateNamespace(ctx, tf, "ls-allns-gw", map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 
-				gwc = test_resources.BuildGatewayClassSpec("gateway.k8s.aws/alb")
+				gwc = test_resources.BuildGatewayClassSpec(test_resources.ALBGatewayControllerName)
 				err = test_resources.CreateGatewayClass(ctx, tf, gwc)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -657,7 +657,7 @@ var _ = Describe("test k8s alb gateway with ListenerSet", func() {
 				ns, err = test_resources.AllocateNamespace(ctx, tf, "ls-sel-gw", map[string]string{})
 				Expect(err).NotTo(HaveOccurred())
 
-				gwc = test_resources.BuildGatewayClassSpec("gateway.k8s.aws/alb")
+				gwc = test_resources.BuildGatewayClassSpec(test_resources.ALBGatewayControllerName)
 				err = test_resources.CreateGatewayClass(ctx, tf, gwc)
 				Expect(err).NotTo(HaveOccurred())
 			})
