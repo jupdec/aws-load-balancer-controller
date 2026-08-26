@@ -341,6 +341,9 @@ func main() {
 			enabledControllers.Insert(gateway_constants.ALBGatewayController)
 		}
 
+		noOpSuccess := func(_, _ string) {}
+		noOpFailure := func(_, _ string, _ error) {}
+
 		gatewayClassReconciler := gateway.NewGatewayClassReconciler(
 			mgr.GetClient(),
 			mgr.GetEventRecorderFor(gateway_constants.GatewayClassController),
@@ -348,6 +351,8 @@ func main() {
 			finalizerManager,
 			enabledControllers,
 			mgr.GetLogger().WithName("gatewayclass-controller"),
+			noOpSuccess,
+			noOpFailure,
 		)
 
 		controller, err := gatewayClassReconciler.SetupWithManager(ctx, mgr)
@@ -368,6 +373,8 @@ func main() {
 			controllerCFG,
 			finalizerManager,
 			mgr.GetLogger().WithName("loadbalancerconfiguration-controller"),
+			noOpSuccess,
+			noOpFailure,
 		)
 
 		lbCfgController, err := loadbalancerConfigurationReconciler.SetupWithManager(ctx, mgr)
@@ -389,6 +396,8 @@ func main() {
 			serviceReferenceCounter,
 			finalizerManager,
 			mgr.GetLogger().WithName("targetgroupconfiguration-controller"),
+			noOpSuccess,
+			noOpFailure,
 		)
 
 		tgCfgController, err := targetGroupConfigurationReconciler.SetupWithManager(ctx, mgr)
@@ -409,6 +418,8 @@ func main() {
 			controllerCFG,
 			finalizerManager,
 			mgr.GetLogger().WithName("listenerruleconfiguration-controller"),
+			noOpSuccess,
+			noOpFailure,
 		)
 
 		listenerRuleCfgController, err := listenerRuleConfigurationReconciler.SetupWithManager(ctx, mgr)
@@ -526,10 +537,11 @@ func setupGatewayController(ctx context.Context, mgr ctrl.Manager, cfg *gatewayC
 
 	var reconciler gateway.Reconciler
 
-	gatewayTagPrefix := gateway_constants.NLBGatewayTagPrefix
 	if controllerType != gateway_constants.ALBGatewayController && controllerType != gateway_constants.NLBGatewayController {
 		return fmt.Errorf("invalid controller type: %s", controllerType)
 	}
+
+	gatewayTagPrefix := gateway_constants.NLBGatewayTagPrefix
 
 	reconcilerCreator := gateway.NewNLBGatewayReconciler
 	if controllerType == gateway_constants.ALBGatewayController {
@@ -561,6 +573,12 @@ func setupGatewayController(ctx context.Context, mgr ctrl.Manager, cfg *gatewayC
 		cfg.reconcileCounters,
 		cfg.targetGroupARNMapper,
 		cfg.listenerSetStatusUpdater,
+		func(_, _ string) {
+			// We don't track anything in this callback
+		},
+		func(_, _ string, err error) {
+			// We don't track anything in this callback
+		},
 	)
 
 	controller, err := reconciler.SetupWithManager(ctx, mgr)
