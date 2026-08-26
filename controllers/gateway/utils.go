@@ -107,8 +107,8 @@ func updateGatewayClassAcceptedCondition(ctx context.Context, k8sClient client.C
 	return nil
 }
 
-// prepareGatewayConditionUpdate inserts the necessary data into the condition field of the gateway. The caller should patch the corresponding gateway. Returns false when no change was performed.
-func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string, newStatus metav1.ConditionStatus, reason string, message string) bool {
+// PrepareGatewayConditionUpdate inserts the necessary data into the condition field of the gateway. The caller should patch the corresponding gateway. Returns false when no change was performed.
+func PrepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string, newStatus metav1.ConditionStatus, reason string, message string) bool {
 	indxToUpdate := -1
 	var derivedCondition metav1.Condition
 	for i, condition := range gw.Status.Conditions {
@@ -119,7 +119,7 @@ func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string,
 		}
 	}
 
-	truncatedMessage := truncateMessage(message)
+	truncatedMessage := TruncateMessage(message)
 
 	if indxToUpdate != -1 {
 		if derivedCondition.Status == newStatus && derivedCondition.Message == truncatedMessage && derivedCondition.Reason == reason && derivedCondition.ObservedGeneration == gw.Generation {
@@ -146,7 +146,7 @@ func prepareGatewayConditionUpdate(gw *gwv1.Gateway, targetConditionType string,
 	return true
 }
 
-func truncateMessage(s string) string {
+func TruncateMessage(s string) string {
 	if utf8.RuneCountInString(s) <= maxMessageLength {
 		return s
 	}

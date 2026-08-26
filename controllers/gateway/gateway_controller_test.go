@@ -103,7 +103,7 @@ func Test_handleReconcileError(t *testing.T) {
 				k8sClient:               k8sClient,
 				logger:                  logr.Discard(),
 				eventRecorder:           record.NewFakeRecorder(10),
-				gatewayConditionUpdater: prepareGatewayConditionUpdate,
+				gatewayConditionUpdater: PrepareGatewayConditionUpdate,
 			}
 
 			// Get a fresh copy of the gateway for the reconciler to work with
@@ -159,7 +159,7 @@ func Test_updateGatewayStatusSuccess_normalizesDNSNameToLowercase(t *testing.T) 
 		k8sClient:                  k8sClient,
 		logger:                     logr.Discard(),
 		eventRecorder:              record.NewFakeRecorder(10),
-		gatewayConditionUpdater:    prepareGatewayConditionUpdate,
+		gatewayConditionUpdater:    PrepareGatewayConditionUpdate,
 		listenerSetStatusSubmitter: &NoopListenerSetStatusSubmitter{},
 	}
 

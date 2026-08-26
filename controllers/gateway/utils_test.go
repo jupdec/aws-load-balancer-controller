@@ -506,7 +506,7 @@ func Test_updateGatewayClassAcceptedCondition(t *testing.T) {
 	}
 }
 
-func Test_prepareGatewayConditionUpdate(t *testing.T) {
+func Test_PrepareGatewayConditionUpdate(t *testing.T) {
 
 	longString := ""
 	for i := 0; i < 50000; i++ {
@@ -858,7 +858,7 @@ func Test_prepareGatewayConditionUpdate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			res := prepareGatewayConditionUpdate(&tc.gw, tc.targetConditionType, tc.newStatus, tc.reason, tc.message)
+			res := PrepareGatewayConditionUpdate(&tc.gw, tc.targetConditionType, tc.newStatus, tc.reason, tc.message)
 
 			// In order to use equals(), we need to make the time fields are fixed.
 			fixedTime := metav1.NewTime(time.Now())

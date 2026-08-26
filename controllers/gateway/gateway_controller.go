@@ -59,12 +59,12 @@ var _ Reconciler = &gatewayReconciler{}
 
 // NewNLBGatewayReconciler constructs a gateway reconciler to handle specifically for NLB gateways
 func NewNLBGatewayReconciler(routeLoader routeutils.Loader, referenceCounter referencecounter.ServiceReferenceCounter, cloud services.Cloud, k8sClient client.Client, certDiscovery certs.CertDiscovery, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingManager networking.NetworkingManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger, metricsCollector lbcmetrics.MetricCollector, reconcileCounters *metricsutil.ReconcileCounters, targetGroupCollector awsmetrics.TargetGroupCollector, targetGroupNameToArnMapper shared_utils.TargetGroupARNMapper, listenerSetStatusSubmitter ListenerSetStatusSubmitter) Reconciler {
-	return newGatewayReconciler(constants.NLBGatewayController, elbv2model.LoadBalancerTypeNetwork, controllerConfig.NLBGatewayMaxConcurrentReconciles, constants.NLBGatewayTagPrefix, controllerConfig.GatewayFinalizerConfig.NLBGatewayFinalizer, certDiscovery, routeLoader, referenceCounter, routeutils.L4RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingManager, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, nlbAddons, targetGroupNameToArnMapper, logger, metricsCollector, reconcileCounters.IncrementNLBGateway, targetGroupCollector, listenerSetStatusSubmitter)
+	return newGatewayReconciler(constants.NLBGatewayController, elbv2model.LoadBalancerTypeNetwork, controllerConfig.NLBGatewayMaxConcurrentReconciles, constants.NLBGatewayTagPrefix, controllerConfig.GatewayFinalizerConfig.NLBGatewayFinalizer, certDiscovery, routeLoader, referenceCounter, routeutils.L4RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingManager, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, NLBAddons, targetGroupNameToArnMapper, logger, metricsCollector, reconcileCounters.IncrementNLBGateway, targetGroupCollector, listenerSetStatusSubmitter)
 }
 
 // NewALBGatewayReconciler constructs a gateway reconciler to handle specifically for ALB gateways
 func NewALBGatewayReconciler(routeLoader routeutils.Loader, cloud services.Cloud, k8sClient client.Client, certDiscovery certs.CertDiscovery, referenceCounter referencecounter.ServiceReferenceCounter, eventRecorder record.EventRecorder, controllerConfig config.ControllerConfig, finalizerManager k8s.FinalizerManager, networkingManager networking.NetworkingManager, networkingSGReconciler networking.SecurityGroupReconciler, networkingSGManager networking.SecurityGroupManager, elbv2TaggingManager elbv2deploy.TaggingManager, subnetResolver networking.SubnetsResolver, vpcInfoProvider networking.VPCInfoProvider, backendSGProvider networking.BackendSGProvider, sgResolver networking.SecurityGroupResolver, logger logr.Logger, metricsCollector lbcmetrics.MetricCollector, reconcileCounters *metricsutil.ReconcileCounters, targetGroupCollector awsmetrics.TargetGroupCollector, targetGroupNameToArnMapper shared_utils.TargetGroupARNMapper, listenerSetStatusSubmitter ListenerSetStatusSubmitter) Reconciler {
-	return newGatewayReconciler(constants.ALBGatewayController, elbv2model.LoadBalancerTypeApplication, controllerConfig.ALBGatewayMaxConcurrentReconciles, constants.ALBGatewayTagPrefix, controllerConfig.GatewayFinalizerConfig.ALBGatewayFinalizer, certDiscovery, routeLoader, referenceCounter, routeutils.L7RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingManager, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, albAddons, targetGroupNameToArnMapper, logger, metricsCollector, reconcileCounters.IncrementALBGateway, targetGroupCollector, listenerSetStatusSubmitter)
+	return newGatewayReconciler(constants.ALBGatewayController, elbv2model.LoadBalancerTypeApplication, controllerConfig.ALBGatewayMaxConcurrentReconciles, constants.ALBGatewayTagPrefix, controllerConfig.GatewayFinalizerConfig.ALBGatewayFinalizer, certDiscovery, routeLoader, referenceCounter, routeutils.L7RouteFilter, cloud, k8sClient, eventRecorder, controllerConfig, finalizerManager, networkingSGReconciler, networkingManager, networkingSGManager, elbv2TaggingManager, subnetResolver, vpcInfoProvider, backendSGProvider, sgResolver, ALBAddons, targetGroupNameToArnMapper, logger, metricsCollector, reconcileCounters.IncrementALBGateway, targetGroupCollector, listenerSetStatusSubmitter)
 }
 
 // newGatewayReconciler constructs a reconciler that responds to gateway object changes
@@ -104,7 +104,7 @@ func newGatewayReconciler(controllerName string, lbType elbv2model.LoadBalancerT
 		reconcileTracker:           reconcileTracker,
 		cfgResolver:                cfgResolver,
 		serviceReferenceCounter:    serviceReferenceCounter,
-		gatewayConditionUpdater:    prepareGatewayConditionUpdate,
+		gatewayConditionUpdater:    PrepareGatewayConditionUpdate,
 		targetGroupNameToArnMapper: targetGroupNameToArnMapper,
 		listenerSetStatusSubmitter: listenerSetStatusSubmitter,
 		listenerSetEnabled:         controllerConfig.FeatureGates.Enabled(config.GatewayListenerSet),
@@ -254,7 +254,7 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	allRoutes := loaderResults.Routes
 
 	// To handle Addons, we need to build the set that has been previously enabled. This is stored within the Gateway annotations.
-	allAddOns := getStoredAddonConfig(gw, r.logger)
+	allAddOns := GetStoredAddonConfig(gw, r.logger)
 
 	currentAddOns := make([]addon.Addon, 0)
 	for _, ao := range allAddOns {
@@ -294,13 +294,13 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	}
 
 	// To accurately track the set of enabled addons, we need to figure out if any addons were added / removed during this run.
-	addOnAdditions, addOnRemovals := diffAddOns(currentAddOns, newAddOnConfig)
+	addOnAdditions, addOnRemovals := DiffAddOns(currentAddOns, newAddOnConfig)
 
 	// To handle addon additions, we need to write the latest add on config back to the Gateway before actually materializing the addon.
 	// This is to ensure that we don't orphan an addon if the user removes the addon prior to a successful annotation update.
 
 	if len(addOnAdditions) > 0 {
-		err = persistAddOns(ctx, r.k8sClient, gw, addOnAdditions.UnsortedList(), false)
+		err = PersistAddOns(ctx, r.k8sClient, gw, addOnAdditions.UnsortedList(), false)
 		if err != nil {
 			return err
 		}
@@ -325,7 +325,7 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 	// By doing so, we have guaranteed that no resources will be orphaned when we update the annotation to remove the annotation,
 	// as we will not attempt to remove the addon again after the annotation reflects the addon is gone.
 	if len(addOnRemovals) > 0 {
-		return persistAddOns(ctx, r.k8sClient, gw, addOnRemovals.UnsortedList(), true)
+		return PersistAddOns(ctx, r.k8sClient, gw, addOnRemovals.UnsortedList(), true)
 	}
 	return nil
 }
@@ -451,26 +451,33 @@ func (r *gatewayReconciler) updateGatewayStatusSuccess(ctx context.Context, lbSt
 		requeueNeeded = true
 	}
 
-	acceptedConditioned := gwv1.GatewayReasonAccepted
+	// Determine Accepted first, then derive the reason from it so we never emit the
+	// contradictory tuple (status=True, reason=ListenersNotValid). At least one valid
+	// listener anywhere on the Gateway or a bound ListenerSet is what makes it Accepted.
 	isAccepted := metav1.ConditionFalse
-	if loaderResults.ValidationResults.HasErrors() {
-		acceptedConditioned = gwv1.GatewayReasonListenersNotValid
-	}
-
 	for _, v := range loaderResults.ValidationResults.GatewayListenerValidation.Results {
 		if v.IsValid {
 			isAccepted = metav1.ConditionTrue
 			break
 		}
 	}
-
-	for _, ls := range loaderResults.ValidationResults.ListenerSetListenerValidation {
-		for _, v := range ls.Results {
-			if v.IsValid {
-				isAccepted = metav1.ConditionTrue
+	if isAccepted != metav1.ConditionTrue {
+		for _, ls := range loaderResults.ValidationResults.ListenerSetListenerValidation {
+			for _, v := range ls.Results {
+				if v.IsValid {
+					isAccepted = metav1.ConditionTrue
+					break
+				}
+			}
+			if isAccepted == metav1.ConditionTrue {
 				break
 			}
 		}
+	}
+
+	acceptedConditioned := gwv1.GatewayReasonAccepted
+	if isAccepted != metav1.ConditionTrue {
+		acceptedConditioned = gwv1.GatewayReasonListenersNotValid
 	}
 
 	needPatch = r.gatewayConditionUpdater(gw, string(gwv1.GatewayConditionAccepted), isAccepted, string(acceptedConditioned), "") || needPatch

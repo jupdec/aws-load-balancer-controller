@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-func Test_getStoredAddonConfig(t *testing.T) {
+func Test_GetStoredAddonConfig(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    *gwv1.Gateway
@@ -110,7 +110,7 @@ func Test_getStoredAddonConfig(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := getStoredAddonConfig(tc.input, logr.Discard())
+			result := GetStoredAddonConfig(tc.input, logr.Discard())
 			sort.Slice(result, func(i, j int) bool {
 				return result[i].Name > result[j].Name
 			})
@@ -120,7 +120,7 @@ func Test_getStoredAddonConfig(t *testing.T) {
 	}
 }
 
-func Test_generateAddOnKey(t *testing.T) {
+func Test_GenerateAddOnKey(t *testing.T) {
 	testCases := []struct {
 		name     string
 		input    addon.Addon
@@ -140,13 +140,13 @@ func Test_generateAddOnKey(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result := generateAddOnKey(tc.input)
+			result := GenerateAddOnKey(tc.input)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
-func Test_diffAddOns(t *testing.T) {
+func Test_DiffAddOns(t *testing.T) {
 	testCases := []struct {
 		name             string
 		old              []addon.Addon
@@ -226,14 +226,14 @@ func Test_diffAddOns(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			additions, removals := diffAddOns(tc.old, tc.new)
+			additions, removals := DiffAddOns(tc.old, tc.new)
 			assert.Equal(t, tc.expectedAdditons, additions)
 			assert.Equal(t, tc.expectedRemovals, removals)
 		})
 	}
 }
 
-func Test_persistAddOns(t *testing.T) {
+func Test_PersistAddOns(t *testing.T) {
 	testCases := []struct {
 		name        string
 		annotations map[string]string
@@ -364,7 +364,7 @@ func Test_persistAddOns(t *testing.T) {
 			err := client.Create(context.Background(), gw)
 			assert.NoError(t, err)
 
-			err = persistAddOns(context.Background(), client, gw, tc.changes, tc.remove)
+			err = PersistAddOns(context.Background(), client, gw, tc.changes, tc.remove)
 			assert.NoError(t, err)
 
 			newGw := &gwv1.Gateway{}
