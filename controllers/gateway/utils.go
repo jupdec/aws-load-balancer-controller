@@ -213,7 +213,12 @@ func isGatewayDeleting(gw *gwv1.Gateway) bool {
 func handleReconcileResult(req reconcile.Request, err error, logger logr.Logger, success func(name string, namespace string), fail func(name string, namespace string, err error)) (ctrl.Result, error) {
 	result, translatedError := runtime.HandleReconcileError(err, logger)
 	if translatedError == nil {
-		success(req.Name, req.Namespace)
+		// Only declare success on a truly empty result (genuine completion).
+		// A pending requeue (either immediate via Requeue or delayed via RequeueAfter)
+		// means reconciliation is not done, so we must not declare success.
+		if !result.Requeue && result.RequeueAfter == 0 {
+			success(req.Name, req.Namespace)
+		}
 	} else {
 		fail(req.Name, req.Namespace, translatedError)
 	}
