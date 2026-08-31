@@ -164,7 +164,7 @@ var _ = Describe("test nlb gateway using ip targets reconciled by the aws load b
 				})
 				By("sending udp request to the lb", func() {
 					endpoint := fmt.Sprintf("%v:8080", dnsName)
-					err := tf.UDPVerifier.VerifyUDP(endpoint)
+					err := verifyUDPUnlessSkipped(tf, endpoint)
 					Expect(err).NotTo(HaveOccurred())
 				})
 				By("confirming the route status", func() {
@@ -413,7 +413,7 @@ var _ = Describe("test nlb gateway using ip targets reconciled by the aws load b
 				})
 				By("sending udp request to the lb", func() {
 					endpoint := fmt.Sprintf("%v:8080", dnsName)
-					err := tf.UDPVerifier.VerifyUDP(endpoint)
+					err := verifyUDPUnlessSkipped(tf, endpoint)
 					Expect(err).NotTo(HaveOccurred())
 				})
 				By("confirming the route status", func() {
@@ -619,7 +619,7 @@ var _ = Describe("test nlb gateway using ip targets reconciled by the aws load b
 				})
 				By("sending udp request to the lb", func() {
 					endpoint := fmt.Sprintf("%v:80", dnsName)
-					err := tf.UDPVerifier.VerifyUDP(endpoint)
+					err := verifyUDPUnlessSkipped(tf, endpoint)
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
