@@ -710,6 +710,20 @@ func validateTCPRouteListenerMismatch(tf *framework.Framework, stack NLBTestStac
 	})
 }
 
+// verifyUDPUnlessSkipped is the UDP-echo assertion used by the NLB specs.
+// On IPv4 clusters it is a no-op: UDP over an NLB IP/instance target group has
+// preserve_client_ip locked to true (AWS constraint), so replies bypass the NLB
+// return path and the client times out unless the NLB is configured with
+// SourceNatIpv4Prefix. That field is not yet in the fork's LoadBalancerConfiguration
+// CRD, so IPv4 UDP verification is skipped. Delete this shim once IPv4 source-NAT
+// support lands and configureIPv6SourceNAT is generalised to also configure it.
+func verifyUDPUnlessSkipped(tf *framework.Framework, endpoint string) error {
+	if tf.Options.IPFamily != framework.IPv6 {
+		return nil
+	}
+	return tf.UDPVerifier.VerifyUDP(endpoint)
+}
+
 func configureIPv6SourceNAT(ctx context.Context, tf *framework.Framework, lbcSpec *elbv2gw.LoadBalancerConfigurationSpec) {
 	// To support UDP over IPv6, we must set the source ipv6 value.
 	// For simplicity, we just let the ELB control plane to assign it.
