@@ -231,6 +231,9 @@ var _ = Describe("test k8s alb gateway with ListenerSet", func() {
 			})
 
 			By("sending http request to the ListenerSet listener port", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:8080/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(200))
 				Expect(err).NotTo(HaveOccurred())
@@ -837,6 +840,9 @@ var _ = Describe("test k8s alb gateway with ListenerSet", func() {
 			})
 
 			By("sending http request to the ListenerSet listener port", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:8080/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(200))
 				Expect(err).NotTo(HaveOccurred())
