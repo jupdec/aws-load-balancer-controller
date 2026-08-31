@@ -133,6 +133,9 @@ var _ = Describe("test k8s alb gateway using ip targets reconciled by the aws lo
 				Expect(err).NotTo(HaveOccurred())
 			})
 			By("cross-ns listener should return 500 as no ref grant is available", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:5000/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(500))
 				Expect(err).NotTo(HaveOccurred())
@@ -173,6 +176,9 @@ var _ = Describe("test k8s alb gateway using ip targets reconciled by the aws lo
 				Expect(err).NotTo(HaveOccurred())
 			})
 			By("sending http request cross namespace service", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:5000/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(200))
 				Expect(err).NotTo(HaveOccurred())
@@ -187,6 +193,9 @@ var _ = Describe("test k8s alb gateway using ip targets reconciled by the aws lo
 				time.Sleep(2 * time.Minute)
 			})
 			By("cross-ns listener should return 500 as no ref grant is available", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:5000/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(500))
 				Expect(err).NotTo(HaveOccurred())

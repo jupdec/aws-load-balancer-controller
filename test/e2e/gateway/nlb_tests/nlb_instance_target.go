@@ -238,6 +238,9 @@ var _ = Describe("test nlb gateway using instance targets reconciled by the aws 
 				Expect(err).NotTo(HaveOccurred())
 			})
 			By("sending http request to the lb to the cross ns listener", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:5000/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(200))
 				Expect(err).NotTo(HaveOccurred())
@@ -506,6 +509,9 @@ var _ = Describe("test nlb gateway using instance targets reconciled by the aws 
 				Expect(err).NotTo(HaveOccurred())
 			})
 			By("sending http request to the lb to the cross ns listener", func() {
+				if test_resources.SkipUnreachablePorts() {
+					return
+				}
 				url := fmt.Sprintf("http://%v:5000/any-path", dnsName)
 				err := tf.HTTPVerifier.VerifyURL(url, http.ResponseCodeMatches(200))
 				Expect(err).NotTo(HaveOccurred())
