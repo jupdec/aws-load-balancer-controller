@@ -137,6 +137,12 @@ type gatewayReconciler struct {
 	lbcEventChan               chan event.TypedGenericEvent[*elbv2gw.LoadBalancerConfiguration]
 	listenerSetStatusSubmitter ListenerSetStatusSubmitter
 	listenerSetEnabled         bool
+	lbConfigValidator          LBConfigValidator
+}
+
+// SetLBConfigValidator registers a validator invoked after LoadBalancerConfiguration resolution; forks (e.g. EKS Auto Mode) use it to reject unsupported fields.
+func (r *gatewayReconciler) SetLBConfigValidator(v LBConfigValidator) {
+	r.lbConfigValidator = v
 }
 
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=referencegrants,verbs=get;list;watch;patch
@@ -226,6 +232,18 @@ func (r *gatewayReconciler) reconcileHelper(ctx context.Context, req reconcile.R
 			r.logger.Error(statusErr, "Unable to update gateway status on failure to retrieve attached config")
 		}
 		return err
+	}
+
+	// Deployment-specific rejection (e.g. EKS Auto Mode) of unsupported LoadBalancerConfiguration fields.
+	if r.lbConfigValidator != nil {
+		if err := r.lbConfigValidator(mergedLbConfig); err != nil {
+			r.logger.Error(err, "LoadBalancerConfiguration rejected by validator", "gateway", client.ObjectKeyFromObject(gw), "lbConfig", client.ObjectKeyFromObject(&mergedLbConfig))
+			statusErr := r.updateGatewayStatusFailure(ctx, gw, gwv1.GatewayReasonInvalid, err.Error(), nil)
+			if statusErr != nil {
+				r.logger.Error(statusErr, "Unable to update gateway status on unsupported LoadBalancerConfiguration")
+			}
+			return err
+		}
 	}
 
 	isDeleting := isGatewayDeleting(gw)
